@@ -1,15 +1,15 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MemberStatus } from '@/types/Members';
 import { getStatusColors, getStatusLabel } from '@/utils/helper';
 import { Layout, Typography } from '@/constants/theme';
 import { moderateScale, verticalScale } from '@/constants/scaling';
 
 interface Props {
-  status: MemberStatus;
+  status: string;
 }
 
 export default function StatusBadge({ status }: Props) {
+  if (!status) return null;
   const { bg, text } = getStatusColors(status);
   return (
     <View style={[styles.badge, { backgroundColor: bg }]}>

@@ -1,32 +1,65 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Layout } from '../constants/theme';
+import { useAuthStore } from '../store/authStore';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading] = useState(false);
+
+  const { login, restoreSession, isLoading, error, isLoggedIn, role, hasRestored } = useAuthStore();
+
+  useEffect(() => {
+    if (!hasRestored) {
+      restoreSession();
+    }
+  }, [hasRestored, restoreSession]);
+
+  // If already logged in (restored session), redirect immediately
+  useEffect(() => {
+    if (hasRestored && isLoggedIn) {
+      redirectByRole(role);
+    }
+  }, [hasRestored, isLoggedIn, role]);
+
+  const redirectByRole = (role: string | null) => {
+    if (role === 'ADMIN') {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/(member-tabs)/qr');
+    }
+  };
 
   const handleLogin = async () => {
-    setLoading(true);
-    // TODO: replace with real auth
-    setTimeout(() => {
-      setLoading(false);
-      router.replace('/(tabs)');
-    }, 800);
+    if (!email.trim() || !password.trim()) return;
+    try {
+      await login(email.trim(), password);
+    } catch {
+      // error is already set in the store — shown in UI below
+    }
   };
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Hero */}
         <View style={styles.hero}>
           <View style={styles.logoRing}>
@@ -43,10 +76,24 @@ export default function LoginScreen() {
           <Text style={styles.cardTitle}>Welcome back</Text>
           <Text style={styles.cardSub}>Sign in to manage your studio</Text>
 
+          {/* Global error banner */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.expiredText} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {/* Email */}
           <View style={styles.fieldWrap}>
             <Text style={styles.fieldLabel}>Email</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="mail-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+            <View style={[styles.inputRow, error ? styles.inputError : null]}>
+              <Ionicons
+                name="mail-outline"
+                size={18}
+                color={Colors.textMuted}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={styles.input}
                 placeholder="admin@powerhouse.com"
@@ -55,14 +102,22 @@ export default function LoginScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isLoading}
               />
             </View>
           </View>
 
+          {/* Password */}
           <View style={styles.fieldWrap}>
             <Text style={styles.fieldLabel}>Password</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.textMuted} style={styles.inputIcon} />
+            <View style={[styles.inputRow, error ? styles.inputError : null]}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color={Colors.textMuted}
+                style={styles.inputIcon}
+              />
               <TextInput
                 style={[styles.input, { flex: 1 }]}
                 placeholder="••••••••"
@@ -70,19 +125,41 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPass}
+                editable={!isLoading}
               />
-              <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-                <Ionicons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={18} color={Colors.textMuted} />
+              <TouchableOpacity
+                onPress={() => setShowPass(!showPass)}
+                style={styles.eyeBtn}
+                disabled={isLoading}
+              >
+                <Ionicons
+                  name={showPass ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={Colors.textMuted}
+                />
               </TouchableOpacity>
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotBtn}>
+          <TouchableOpacity style={styles.forgotBtn} disabled={isLoading}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.loginBtn, loading && styles.loginBtnDisabled]} onPress={handleLogin} disabled={loading} activeOpacity={0.85}>
-            <Text style={styles.loginBtnText}>{loading ? 'Signing in…' : 'Login'}</Text>
+          {/* Login Button */}
+          <TouchableOpacity
+            style={[
+              styles.loginBtn,
+              (isLoading || !email || !password) && styles.loginBtnDisabled,
+            ]}
+            onPress={handleLogin}
+            disabled={isLoading || !email || !password}
+            activeOpacity={0.85}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.loginBtnText}>Login</Text>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -93,9 +170,19 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.primary },
-  scroll: { flexGrow: 1, paddingHorizontal: 24, justifyContent: 'center' },
-  hero: { alignItems: 'center', marginBottom: 36 },
+  root: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+  },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    justifyContent: 'center',
+  },
+  hero: {
+    alignItems: 'center',
+    marginBottom: 36,
+  },
   logoRing: {
     width: 96,
     height: 96,
@@ -114,18 +201,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  appName: { ...Typography.heading1, color: Colors.textOnDark, letterSpacing: 0.5 },
-  appSub: { ...Typography.body, color: Colors.textSubtleOnDark, marginTop: 4 },
+  appName: {
+    ...Typography.heading1,
+    color: Colors.textOnDark,
+    letterSpacing: 0.5,
+  },
+  appSub: {
+    ...Typography.body,
+    color: Colors.textSubtleOnDark,
+    marginTop: 4,
+  },
   card: {
     backgroundColor: Colors.surface,
     borderRadius: Layout.radius.lg,
     padding: 24,
     gap: 14,
   },
-  cardTitle: { ...Typography.heading3, color: Colors.textPrimary },
-  cardSub: { ...Typography.caption, color: Colors.textMuted, marginTop: -8 },
-  fieldWrap: { gap: 6 },
-  fieldLabel: { ...Typography.label, color: Colors.textPrimary, fontWeight: '600' },
+  cardTitle: {
+    ...Typography.heading3,
+    color: Colors.textPrimary,
+  },
+  cardSub: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginTop: -8,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.expiredBg,
+    borderRadius: Layout.radius.sm,
+    borderWidth: 0.5,
+    borderColor: Colors.expiredRed,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 4,
+  },
+  errorText: {
+    ...Typography.caption,
+    color: Colors.expiredText,
+    flex: 1,
+    fontWeight: '500',
+  },
+  fieldWrap: {
+    gap: 6,
+  },
+  fieldLabel: {
+    ...Typography.label,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -136,11 +262,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 48,
   },
-  inputIcon: { marginRight: 8 },
-  input: { flex: 1, ...Typography.body, color: Colors.textPrimary },
-  eyeBtn: { padding: 4 },
-  forgotBtn: { alignSelf: 'flex-end', marginTop: -6 },
-  forgotText: { ...Typography.caption, color: Colors.accent, fontWeight: '500' },
+  inputError: {
+    borderColor: Colors.expiredRed,
+    backgroundColor: Colors.expiredBg,
+  },
+  inputIcon: {
+    marginRight: 8,
+  },
+  input: {
+    flex: 1,
+    ...Typography.body,
+    color: Colors.textPrimary,
+  },
+  eyeBtn: {
+    padding: 4,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginTop: -6,
+  },
+  forgotText: {
+    ...Typography.caption,
+    color: Colors.accent,
+    fontWeight: '500',
+  },
   loginBtn: {
     backgroundColor: Colors.accent,
     borderRadius: Layout.radius.md,
@@ -149,7 +294,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 4,
   },
-  loginBtnDisabled: { opacity: 0.7 },
-  loginBtnText: { ...Typography.body, color: '#fff', fontWeight: '700', letterSpacing: 0.3 },
-  footer: { ...Typography.caption, color: 'rgba(228,145,201,0.5)', textAlign: 'center', marginTop: 28 },
+  loginBtnDisabled: {
+    opacity: 0.5,
+  },
+  loginBtnText: {
+    ...Typography.body,
+    color: '#fff',
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  footer: {
+    ...Typography.caption,
+    color: 'rgba(228,145,201,0.5)',
+    textAlign: 'center',
+    marginTop: 28,
+  },
 });

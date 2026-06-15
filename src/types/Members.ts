@@ -1,10 +1,10 @@
-export type MemberStatus = 'active' | 'expiring' | 'expired' | 'paused';
-export type PlanType = 'monthly' | 'quarterly' | 'annual';
-export type PaymentMode = 'cash' | 'upi' | 'card';
+export type MemberStatus = 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'EXPIRING' | 'PAUSED';
+export type PlanType = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+export type PaymentMode = 'CASH' | 'UPI' | 'CARD';
 export type PaymentStatus = 'paid' | 'due';
 
 export interface Payment {
-  id: string;
+  id: number;
   amount: number;
   date: string;
   planName: string;
@@ -18,7 +18,7 @@ export interface AttendanceDay {
 }
 
 export interface Member {
-  id: string;
+  id: number;
   name: string;
   phone: string;
   email?: string;
@@ -36,5 +36,6 @@ export interface Member {
   totalVisitsThisMonth: number;
   attendance: AttendanceDay[];
   payments: Payment[];
+  daysRemaining: number;
   notes?: string;
 }

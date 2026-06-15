@@ -1,15 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View,
-  TextInput,
-  FlatList,
-  StyleSheet,
-  TouchableOpacity,
-  Text,
+  View, TextInput, FlatList, StyleSheet,
+  TouchableOpacity, Text, ActivityIndicator,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useMembers } from '@/context/MembersContext';
+import { useMemberStore } from '@/store/memberStore';
 import { Member, MemberStatus } from '@/types/Members';
 import { Colors, Typography, Layout } from '@/constants/theme';
 import AppHeader from '@/components/AppHeader';
@@ -17,23 +13,30 @@ import MemberCard from '@/components/MemberCard';
 import EmptyState from '@/components/EmptyState';
 import { scale, moderateScale, verticalScale } from '@/constants/scaling';
 
-type FilterType = 'all' | MemberStatus;
+type FilterType = 'all' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'PAUSED';
+
 const FILTERS: { key: FilterType; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'active', label: 'Active' },
-  { key: 'expiring', label: 'Expiring' },
-  { key: 'expired', label: 'Expired' },
-  { key: 'paused', label: 'Paused' },
+  { key: 'all',      label: 'All' },
+  { key: 'ACTIVE',   label: 'Active' },
+  { key: 'EXPIRING', label: 'Expiring' },
+  { key: 'EXPIRED',  label: 'Expired' },
+  { key: 'PAUSED',   label: 'Paused' },
 ];
 
 export default function MembersScreen() {
-  const { members } = useMembers();
+  const { members, isLoading, error, fetchMembers } = useMemberStore();
   const params = useLocalSearchParams<{ success?: string }>();
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('all');
+
+  const [search, setSearch]               = useState('');
+  const [filter, setFilter]               = useState<FilterType>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
-  // Show toast when navigated back after a successful add/edit
+  // Fetch members on mount
+  useEffect(() => {
+    fetchMembers();
+  }, []);
+
+  // Show toast on navigate-back after add/edit
   useEffect(() => {
     if (params.success === 'created' || params.success === 'updated') {
       setShowSuccessToast(true);
@@ -53,29 +56,36 @@ export default function MembersScreen() {
   }, [members, search, filter]);
 
   const handlePress = (member: Member) => {
-    router.push({ pathname: '/(members)/memberDetail', params: { id: member.id } });
+    router.push({
+      pathname: '/(members)/memberDetail',
+      params: { id: String(member.id) },
+    });
   };
+
+  const expiringCount = members.filter(m => m.status === 'EXPIRING').length;
 
   return (
     <View style={styles.root}>
-      {/* Toast Notification */}
+
+      {/* Success Toast */}
       {showSuccessToast && (
         <View style={styles.toast}>
           <Ionicons name="checkmark-circle" size={20} color="#fff" />
           <Text style={styles.toastText}>
             {params.success === 'updated'
               ? 'Member updated successfully!'
-              : 'Member created successfully!'}
+              : 'Member added successfully!'}
           </Text>
         </View>
       )}
 
       <AppHeader
         title="Members"
-        subtitle={`${members.length} total · ${members.filter(m => m.status === 'expiring').length} expiring`}
+        subtitle={`${members.length} total · ${expiringCount} expiring`}
       />
 
       <View style={styles.body}>
+
         {/* Search */}
         <View style={styles.searchBar}>
           <Ionicons name="search-outline" size={18} color={Colors.accent} />
@@ -109,24 +119,52 @@ export default function MembersScreen() {
           ))}
         </View>
 
+        {/* Error banner */}
+        {error && (
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={16} color={Colors.expiredText} />
+            <Text style={styles.errorBannerText}>{error}</Text>
+            <TouchableOpacity onPress={() => fetchMembers()}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* List */}
-        <FlatList
-          data={filtered}
-          keyExtractor={m => m.id}
-          renderItem={({ item }) => <MemberCard member={item} onPress={handlePress} />}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <EmptyState
-              icon="people-outline"
-              title="No members found"
-              subtitle="Try a different search or filter"
-            />
-          }
-        />
+        {isLoading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color={Colors.accent} />
+            <Text style={styles.loadingText}>Loading members…</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={m => String(m.id)}
+            renderItem={({ item }) => (
+              <MemberCard member={item} onPress={handlePress} />
+            )}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            onRefresh={fetchMembers}
+            refreshing={isLoading}
+            ListEmptyComponent={
+              <EmptyState
+                icon="people-outline"
+                title="No members found"
+                subtitle={
+                  search
+                    ? 'Try a different search term'
+                    : filter !== 'all'
+                    ? `No ${filter.toLowerCase()} members`
+                    : 'Add your first member using the + button'
+                }
+              />
+            }
+          />
+        )}
       </View>
 
-      {/* FAB — navigates to memberForm in create mode */}
+      {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
         activeOpacity={0.85}
@@ -139,14 +177,8 @@ export default function MembersScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  body: {
-    flex: 1,
-    padding: scale(Layout.spacing.lg),
-  },
+  root: { flex: 1, backgroundColor: Colors.background },
+  body: { flex: 1, padding: scale(Layout.spacing.lg) },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -169,7 +201,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: scale(6),
     marginBottom: verticalScale(14),
-    flexWrap: 'nowrap',
   },
   chip: {
     paddingHorizontal: scale(14),
@@ -179,23 +210,46 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: Colors.border,
   },
-  chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: {
     ...Typography.caption,
     color: Colors.textPrimary,
     fontWeight: '500',
     fontSize: moderateScale(Typography.caption.fontSize ?? 12),
   },
-  chipTextActive: {
-    color: Colors.textOnDark,
-    fontSize: moderateScale(Typography.caption.fontSize ?? 12),
+  chipTextActive: { color: Colors.textOnDark },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.expiredBg,
+    borderRadius: moderateScale(Layout.radius.sm),
+    borderWidth: 0.5,
+    borderColor: Colors.expiredRed,
+    padding: moderateScale(10),
+    marginBottom: verticalScale(10),
   },
-  list: {
-    paddingBottom: verticalScale(80),
+  errorBannerText: {
+    ...Typography.caption,
+    color: Colors.expiredText,
+    flex: 1,
   },
+  retryText: {
+    ...Typography.caption,
+    color: Colors.accent,
+    fontWeight: '700',
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: verticalScale(12),
+  },
+  loadingText: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+  },
+  list: { paddingBottom: verticalScale(80) },
   fab: {
     position: 'absolute',
     bottom: verticalScale(24),
@@ -226,15 +280,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: scale(10),
     zIndex: 999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
     elevation: 4,
   },
-  toastText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: moderateScale(14),
-  },
+  toastText: { color: '#fff', fontWeight: '600', fontSize: moderateScale(14) },
 });

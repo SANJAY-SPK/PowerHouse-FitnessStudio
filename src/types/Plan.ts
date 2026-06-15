@@ -1,7 +1,7 @@
-export type PlanType = 'monthly' | 'quarterly' | 'annual';
+export type PlanType = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
 
 export interface Plan {
-  id: string;
+  id: number;
   name: string;
   type: PlanType;
   durationDays: number;
