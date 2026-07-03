@@ -18,8 +18,21 @@ export default function MemberCard({ member, onPress }: Props) {
     <TouchableOpacity style={styles.card} onPress={() => onPress(member)} activeOpacity={0.7}>
       <AvatarCircle name={member.name} id={member.id} size={44} />
       <View style={styles.info}>
-        <Text style={styles.name}>{member.name}</Text>
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>{member.name}</Text>
+          {member.isPtMember && (
+            <View style={styles.ptBadge}>
+              <Ionicons name="fitness-outline" size={9} color="#fff" />
+              <Text style={styles.ptBadgeText}>PT</Text>
+            </View>
+          )}
+        </View>
         <Text style={styles.plan}>{member.planName} · since {formatDateShort(member.joinDate)}</Text>
+        {member.assignedTrainer && (
+          <Text style={styles.trainer}>
+            <Ionicons name="person-outline" size={10} color={Colors.textMuted} /> {member.assignedTrainer}
+          </Text>
+        )}
       </View>
       <View style={styles.right}>
         <StatusBadge status={member.status} />
@@ -45,17 +58,44 @@ const styles = StyleSheet.create({
   info: {
     flex: 1,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    flexWrap: 'wrap',
+  },
   name: {
     ...Typography.body,
     fontWeight: '600',
     color: Colors.textPrimary,
     fontSize: moderateScale(Typography.body.fontSize),
   },
+  ptBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#C6860A',
+    paddingHorizontal: scale(5),
+    paddingVertical: verticalScale(1.5),
+    borderRadius: moderateScale(4),
+  },
+  ptBadgeText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: moderateScale(8),
+    letterSpacing: 0.3,
+  },
   plan: {
     ...Typography.caption,
     color: Colors.textMuted,
     marginTop: verticalScale(2),
     fontSize: moderateScale(Typography.caption.fontSize),
+  },
+  trainer: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginTop: verticalScale(1),
+    fontSize: moderateScale(10),
   },
   right: {
     alignItems: 'flex-end',

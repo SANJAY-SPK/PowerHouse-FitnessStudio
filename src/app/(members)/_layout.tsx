@@ -8,7 +8,7 @@ export default function MembersLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.background },
+          contentStyle: { backgroundColor: Colors.surface },
           animation: 'slide_from_right',
         }}>
         <Stack.Screen name="memberDetail" />

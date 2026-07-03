@@ -14,7 +14,7 @@ export default function Index() {
       if (isLoggedIn) {
         role === 'ADMIN'
           ? router.replace('/(tabs)')
-          : router.replace('/(member-tabs)/qr');
+          : router.replace('/(tabs)');
       } else {
         router.replace('/login');
       }

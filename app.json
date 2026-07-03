@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PowerHouseFitnessStudio",
+    "name": "Power House",
     "slug": "PowerHouseFitnessStudio",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -23,6 +23,7 @@
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+    "backgroundColor": "#FFFFFF",
     "plugins": [
       "expo-router",
       [
@@ -43,6 +44,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "225f7ca6-734f-414c-9fdd-3b267e738e1d"
+      }
     }
   }
 }

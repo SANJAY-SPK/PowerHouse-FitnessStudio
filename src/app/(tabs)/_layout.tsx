@@ -2,89 +2,83 @@ import { useEffect } from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
-import { scale, moderateScale, verticalScale } from '@/constants/scaling';
 import RoleGate from '@/components/RoleGate';
+import CustomTabBar from '@/components/CustomTabBar';
 import { useAlertStore } from '@/store/alertStore';
+import { useAuthStore } from '@/store/authStore';
 
 export default function TabLayout() {
   const { unreadCount, fetchUnreadCount } = useAlertStore();
+  const { isLoggedIn } = useAuthStore();
 
   // Fetch real alert count once on mount, then refresh every 5 minutes
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchUnreadCount();
     const interval = setInterval(fetchUnreadCount, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isLoggedIn]);
 
   return (
     <RoleGate allowedRoles={['ADMIN']} fallbackRoute="/(tabs)">
       <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          // ── Flicker fix: set the scene background to match the app background
-          // so there's no white flash when switching tabs
-          sceneStyle: { backgroundColor: Colors.background },
-          tabBarActiveTintColor: Colors.accent,
-          tabBarInactiveTintColor: Colors.pausedGray,
-          tabBarStyle: {
-            backgroundColor: Colors.surface,
-            borderTopColor: Colors.border,
-            borderTopWidth: moderateScale(0.5),
-            height: verticalScale(62),
-            paddingBottom: verticalScale(8),
-            paddingTop: verticalScale(4),
-          },
-          tabBarLabelStyle: {
-            fontSize: moderateScale(10),
-            fontWeight: '500',
-          },
+          // Flicker fix: match the scene background to the app background
+          // so there's no white flash when switching tabs.
+          sceneStyle: { backgroundColor: Colors.surface },
+          // Smooth cross-fade + slide when switching tabs instead of an
+          // instant cut. Requires @react-navigation/bottom-tabs v7+
+          // (ships with Expo SDK 52+). Falls back gracefully if unsupported.
+          animation: 'shift',
         }}
       >
         <Tabs.Screen
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="members"
           options={{
             title: 'Members',
-            tabBarIcon: ({ color, size }) => <Ionicons name="people-outline" size={size} color={color} />,
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'people' : 'people-outline'} size={size} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="checkin"
+          options={{
+            title: 'Check In',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'scan' : 'scan-outline'} size={size} color={color} />
+            ),
           }}
         />
         <Tabs.Screen
           name="alerts"
           options={{
             title: 'Alerts',
-            tabBarIcon: ({ color, size }) => (
-              <Ionicons name="notifications-outline" size={size} color={color} />
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={size} color={color} />
             ),
             // Show badge only when there are unread alerts; hide completely when 0
             tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
-            tabBarBadgeStyle: {
-              backgroundColor: Colors.expiredRed,
-              fontSize: moderateScale(10),
-              minWidth: moderateScale(18),
-              height: moderateScale(18),
-              borderRadius: moderateScale(9),
-              lineHeight: moderateScale(18),
-            },
           }}
         />
         <Tabs.Screen
           name="revenue"
           options={{
             title: 'Revenue',
-            tabBarIcon: ({ color, size }) => <Ionicons name="bar-chart-outline" size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: 'Settings',
-            tabBarIcon: ({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />,
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons name={focused ? 'bar-chart' : 'bar-chart-outline'} size={size} color={color} />
+            ),
           }}
         />
       </Tabs>

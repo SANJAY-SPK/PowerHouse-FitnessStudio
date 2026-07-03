@@ -7,18 +7,16 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, 
-            contentStyle: { backgroundColor: Colors.background },
+        <Stack screenOptions={{ 
+            headerShown: false, 
+            contentStyle: { backgroundColor: Colors.surface },
+            animation: 'slide_from_right',
          }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="login" />
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen
-            name="(members)/memberDetail"
-            options={{
-              animation: 'slide_from_right',
-            }}
-          />
+          <Stack.Screen name="(members)" />
+          <Stack.Screen name="settings" />
         </Stack>
     </SafeAreaProvider>
   );

@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Layout } from '@/constants/theme';
 import { formatCurrency } from '@/utils/helper';
 import AppHeader from '@/components/AppHeader';
-import StatCard from '@/components/StatCard';
 import AlertCard from '@/components/AlertCard';
 import { scale, moderateScale, verticalScale } from '@/constants/scaling';
 import { useDashboardStore } from '@/store/dashboardStore';
@@ -13,16 +12,17 @@ import { useMemberStore } from '@/store/memberStore';
 import { useAlertStore } from '@/store/alertStore';
 import { memberService } from '@/services/memberService';
 import { paymentService } from '@/services/paymentService';
+import { alertSettingsService } from '@/services/alertSettingsService';
 import { Alert } from '@/types/Alert';
 
 const QUICK_ACTIONS = [
-  { icon: 'person-add-outline' as const, label: 'Add Member',  route: '/(members)/memberForm' },
-  { icon: 'wallet-outline'     as const, label: 'Payment',     route: '/(tabs)/revenue' },
-  { icon: 'scan-outline'       as const, label: 'Check In',    route: '/(members)/checkin' },
-  { icon: 'stats-chart-outline' as const, label: 'Reports',   route: '/(tabs)/revenue' },
+  { icon: 'person-add-outline' as const, label: 'Add',  route: '/(members)/memberForm', color: '#7C3AED', bg: 'rgba(124,58,237,0.12)' },
+  { icon: 'wallet-outline'     as const, label: 'Payment',     route: '/(tabs)/revenue',       color: '#059669', bg: 'rgba(5,150,105,0.12)' },
+  { icon: 'scan-outline'       as const, label: 'Check In',    route: '/(tabs)/checkin',       color: Colors.accent, bg: 'rgba(152,37,152,0.12)' },
+  { icon: 'stats-chart-outline' as const, label: 'Reports',   route: '/(tabs)/revenue',       color: '#0284C7', bg: 'rgba(2,132,199,0.12)' },
 ];
 
-function buildAlerts(members: any[], duePayments: any[]): Alert[] {
+function buildAlerts(members: any[], duePayments: any[], inactiveDays: number): Alert[] {
   const alertsList: Alert[] = [];
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -60,7 +60,7 @@ function buildAlerts(members: any[], duePayments: any[]): Alert[] {
       const diffDays = Math.floor(
         (now.getTime() - new Date(m.lastCheckIn).getTime()) / (1000 * 60 * 60 * 24)
       );
-      if (diffDays >= 14) {
+      if (diffDays >= inactiveDays) {
         alertsList.push({
           id: `inactive-${m.id}`,
           memberId: String(m.id),
@@ -99,8 +99,18 @@ function buildAlerts(members: any[], duePayments: any[]): Alert[] {
   return alertsList;
 }
 
+const STAT_CONFIG = [
+  { key: 'activeMembers',    label: 'Active Members',      icon: 'people'           as const, color: '#22c55e', bg: 'rgba(34,197,94,0.1)' },
+  { key: 'expiringThisWeek', label: 'Expiring This Week',  icon: 'time'             as const, color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
+  { key: 'totalCollected',   label: 'Revenue (Month)',     icon: 'cash'             as const, color: Colors.accent, bg: 'rgba(152,37,152,0.1)', isCurrency: true },
+  { key: 'overduePayments',  label: 'Overdue Dues',        icon: 'alert-circle'     as const, color: '#ef4444', bg: 'rgba(239,68,68,0.1)' },
+];
+
 export default function DashboardScreen() {
-  const today = new Date().toLocaleDateString('en-IN', {
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+  const today = now.toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
 
@@ -111,11 +121,12 @@ export default function DashboardScreen() {
 
   const loadAlerts = async () => {
     try {
-      const [membersData, duePayments] = await Promise.all([
+      const [settings, membersData, duePayments] = await Promise.all([
+        alertSettingsService.load(),
         memberService.getAll(),
         paymentService.getDue(),
       ]);
-      setAlerts(buildAlerts(membersData, duePayments));
+      setAlerts(buildAlerts(membersData, duePayments, settings.inactiveDays));
     } catch (err) {
       console.error('Failed to load alerts for dashboard:', err);
     }
@@ -131,15 +142,19 @@ export default function DashboardScreen() {
   const recentMembers = members.slice(0, 3);
   const todayAlerts = alerts.slice(0, 3);
 
+  const getStatValue = (key: string) => {
+    if (!stats) return 0;
+    return (stats as any)[key] ?? 0;
+  };
+
   return (
     <View style={styles.root}>
       <AppHeader
         title="Power House FS"
-        greeting="Good morning, Admin"
+        greeting={`${greeting}, Admin`}
         subtitle={today}
-        rightIcon="notifications-outline"
-        rightBadge={unreadCount}
-        onRightPress={() => router.push('/(tabs)/alerts')}
+        rightIcon="settings-outline"
+        onRightPress={() => router.push('/settings')}
       />
 
       <ScrollView
@@ -147,8 +162,29 @@ export default function DashboardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* ── Hero Banner ───────────────────────────────────────────── */}
+        <View style={styles.heroBanner}>
+          <View style={styles.heroBannerInner}>
+            <View style={styles.heroGlow} />
+            <Text style={styles.heroLabel}>TODAY'S SNAPSHOT</Text>
+            <Text style={styles.heroDate}>{today}</Text>
+            {unreadCount > 0 && (
+              <TouchableOpacity
+                style={styles.heroBadge}
+                onPress={() => router.push('/(tabs)/alerts')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="notifications" size={12} color="#fff" />
+                <Text style={styles.heroBadgeText}>{unreadCount} unread alert{unreadCount !== 1 ? 's' : ''}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
-        {/* Stats Grid */}
+        {/* ── Stats Grid ────────────────────────────────────────────── */}
+        <View style={styles.sectionLabel}>
+          <Text style={styles.sectionLabelText}>OVERVIEW</Text>
+        </View>
         {statsLoading ? (
           <View style={styles.loadingRow}>
             <ActivityIndicator color={Colors.accent} />
@@ -156,67 +192,66 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={styles.statsGrid}>
-            <View style={styles.statsRow}>
-              <StatCard
-                label="Active Members"
-                value={stats?.activeMembers ?? 0}
-                dotColor={Colors.activeGreen}
-              />
-              <StatCard
-                label="Expiring This Week"
-                value={stats?.expiringThisWeek ?? 0}
-                dotColor={Colors.expiringAmber}
-              />
-            </View>
-            <View style={styles.statsRow}>
-              <StatCard
-                label="Revenue — May"
-                value={formatCurrency(stats?.totalCollected ?? 0)}
-                dotColor={Colors.accent}
-                valueColor={Colors.accent}
-              />
-              <StatCard
-                label="Overdue Dues"
-                value={stats?.overduePayments ?? 0}
-                dotColor={Colors.expiredRed}
-                valueColor={Colors.expiredRed}
-              />
-            </View>
+            {STAT_CONFIG.map(cfg => {
+              const raw = getStatValue(cfg.key);
+              const display = cfg.isCurrency ? formatCurrency(raw) : String(raw);
+              return (
+                <View key={cfg.key} style={styles.statCard}>
+                  <View style={[styles.statIconBox, { backgroundColor: cfg.bg }]}>
+                    <Ionicons name={cfg.icon} size={20} color={cfg.color} />
+                  </View>
+                  <Text style={[styles.statValue, { color: cfg.color }]}>{display}</Text>
+                  <Text style={styles.statLabel}>{cfg.label}</Text>
+                </View>
+              );
+            })}
           </View>
         )}
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
+        {/* ── Quick Actions ─────────────────────────────────────────── */}
+        <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsRow}>
-            {QUICK_ACTIONS.map((a) => (
-              <TouchableOpacity
-                key={a.label}
-                style={styles.actionBtn}
-                activeOpacity={0.7}
-                onPress={() => router.push(a.route as any)}
-              >
-                <View style={styles.actionIcon}>
-                  <Ionicons name={a.icon} size={22} color={Colors.accent} />
-                </View>
-                <Text style={styles.actionLabel}>{a.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        </View>
+        <View style={styles.actionsGrid}>
+          {QUICK_ACTIONS.map((a) => (
+            <TouchableOpacity
+              key={a.label}
+              style={styles.actionCard}
+              activeOpacity={0.75}
+              onPress={() => router.push(a.route as any)}
+            >
+              <View style={[styles.actionIconBox, { backgroundColor: a.bg }]}>
+                <Ionicons name={a.icon} size={20} color={a.color} />
+              </View>
+              <Text style={styles.actionLabel}>{a.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Alerts */}
+        {/* ── Alerts ────────────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Today's Alerts</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/alerts')}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionDot, { backgroundColor: Colors.expiredRed }]} />
+              <Text style={styles.sectionTitle}>Today's Alerts</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewAllBtn}
+              onPress={() => router.push('/(tabs)/alerts')}
+            >
               <Text style={styles.viewAll}>View All</Text>
+              <Ionicons name="chevron-forward" size={12} color={Colors.accent} />
             </TouchableOpacity>
           </View>
           {todayAlerts.length === 0 ? (
-            <View style={styles.emptyRow}>
-              <Ionicons name="checkmark-circle-outline" size={20} color={Colors.activeGreen} />
-              <Text style={styles.emptyText}>No alerts today</Text>
+            <View style={styles.emptyCard}>
+              <View style={[styles.emptyIconBox, { backgroundColor: 'rgba(34,197,94,0.1)' }]}>
+                <Ionicons name="checkmark-circle" size={22} color={Colors.activeGreen} />
+              </View>
+              <View>
+                <Text style={styles.emptyTitle}>All Clear!</Text>
+                <Text style={styles.emptyText}>No alerts for today</Text>
+              </View>
             </View>
           ) : (
             todayAlerts.map(alert => (
@@ -225,49 +260,74 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* Recent Members */}
+        {/* ── Recent Members ────────────────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>Recent Members</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/members')}>
+            <View style={styles.sectionTitleRow}>
+              <View style={[styles.sectionDot, { backgroundColor: Colors.accent }]} />
+              <Text style={styles.sectionTitle}>Recent Members</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.viewAllBtn}
+              onPress={() => router.push('/(tabs)/members')}
+            >
               <Text style={styles.viewAll}>View All</Text>
+              <Ionicons name="chevron-forward" size={12} color={Colors.accent} />
             </TouchableOpacity>
           </View>
           {membersLoading ? (
             <ActivityIndicator color={Colors.accent} style={{ marginTop: 8 }} />
           ) : recentMembers.length === 0 ? (
-            <View style={styles.emptyRow}>
-              <Ionicons name="people-outline" size={20} color={Colors.textMuted} />
-              <Text style={styles.emptyText}>No members yet</Text>
+            <View style={styles.emptyCard}>
+              <View style={[styles.emptyIconBox, { backgroundColor: 'rgba(21,23,61,0.06)' }]}>
+                <Ionicons name="people-outline" size={22} color={Colors.textMuted} />
+              </View>
+              <View>
+                <Text style={styles.emptyTitle}>No Members Yet</Text>
+                <Text style={styles.emptyText}>Add your first member via Quick Actions</Text>
+              </View>
             </View>
           ) : (
-            recentMembers.map(member => (
-              <TouchableOpacity
-                key={member.id}
-                style={styles.recentCard}
-                onPress={() => router.push({
-                  pathname: '/(members)/memberDetail',
-                  params: { id: member.id },
-                })}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.recentDot, {
-                  backgroundColor:
-                    member.status === 'ACTIVE'    ? Colors.activeGreen :
-                    member.status === 'EXPIRING'  ? Colors.expiringAmber :
-                    member.status === 'EXPIRED'   ? Colors.expiredRed
-                                                  : Colors.pausedGray,
-                }]} />
-                <Text style={styles.recentName}>{member.name}</Text>
-                <Text style={styles.recentPlan}>{member.planName}</Text>
-                <Ionicons
-                  name="chevron-forward"
-                  size={14}
-                  color={Colors.textMuted}
-                  style={{ marginLeft: 'auto' }}
-                />
-              </TouchableOpacity>
-            ))
+            <View style={styles.memberList}>
+              {recentMembers.map((member, idx) => {
+                const statusColor =
+                  member.status === 'ACTIVE'   ? Colors.activeGreen :
+                  member.status === 'EXPIRING' ? Colors.expiringAmber :
+                  member.status === 'EXPIRED'  ? Colors.expiredRed
+                                               : Colors.pausedGray;
+                return (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={[
+                      styles.recentCard,
+                      idx < recentMembers.length - 1 && styles.recentCardBorder,
+                    ]}
+                    onPress={() => router.push({
+                      pathname: '/(members)/memberDetail',
+                      params: { id: member.id },
+                    })}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.memberAvatar, { backgroundColor: `${statusColor}20` }]}>
+                      <Text style={[styles.memberAvatarText, { color: statusColor }]}>
+                        {member.name.trim().split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.recentName}>{member.name}</Text>
+                      <Text style={styles.recentPlan}>{member.planName ?? '—'}</Text>
+                    </View>
+                    <View style={[styles.statusPill, { backgroundColor: `${statusColor}18` }]}>
+                      <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                      <Text style={[styles.statusText, { color: statusColor }]}>
+                        {member.status}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           )}
         </View>
 
@@ -281,13 +341,75 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   content: {
     padding: scale(Layout.spacing.lg),
-    paddingBottom: verticalScale(32),
+    paddingBottom: verticalScale(120),
+    gap: verticalScale(4),
   },
+
+  // Hero Banner
+  heroBanner: {
+    borderRadius: moderateScale(16),
+    overflow: 'hidden',
+    marginBottom: verticalScale(16),
+    backgroundColor: Colors.primary,
+  },
+  heroBannerInner: {
+    padding: moderateScale(18),
+    overflow: 'hidden',
+  },
+  heroGlow: {
+    position: 'absolute',
+    top: -30,
+    right: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(152,37,152,0.35)',
+  },
+  heroLabel: {
+    fontSize: moderateScale(10),
+    fontWeight: '700',
+    color: 'rgba(241,233,233,0.5)',
+    letterSpacing: 1.5,
+    marginBottom: verticalScale(4),
+  },
+  heroDate: {
+    ...Typography.body,
+    color: '#F1E9E9',
+    fontWeight: '600',
+    fontSize: moderateScale(13),
+  },
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(5),
+    marginTop: verticalScale(10),
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(239,68,68,0.7)',
+    paddingHorizontal: scale(10),
+    paddingVertical: verticalScale(4),
+    borderRadius: moderateScale(20),
+  },
+  heroBadgeText: {
+    color: '#fff',
+    fontSize: moderateScale(11),
+    fontWeight: '600',
+  },
+
+  // Section labels
+  sectionLabel: {
+    marginBottom: verticalScale(8),
+  },
+  sectionLabelText: {
+    fontSize: moderateScale(10),
+    fontWeight: '700',
+    color: Colors.textMuted,
+    letterSpacing: 1.2,
+  },
+
+  // Loading
   loadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -303,107 +425,208 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textMuted,
   },
+
+  // Stats grid
   statsGrid: {
-    gap: verticalScale(8),
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(10),
     marginBottom: verticalScale(20),
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: scale(8),
+  statCard: {
+    width: '47%',
+    backgroundColor: Colors.surface,
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: moderateScale(14),
+    gap: verticalScale(6),
+   
   },
+  statIconBox: {
+    width: moderateScale(38),
+    height: moderateScale(38),
+    borderRadius: moderateScale(10),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: {
+    fontSize: moderateScale(22),
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    marginTop: verticalScale(2),
+  },
+  statLabel: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: moderateScale(11),
+  },
+
+  // Quick Actions
+  actionsGrid: {
+    flexDirection: 'row',
+    gap: scale(10),
+    marginBottom: verticalScale(20),
+  },
+  actionCard: {
+    flex: 1,
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: moderateScale(12),
+    alignItems: 'center',
+    gap: verticalScale(8),
+    height: verticalScale(80),
+  },
+  actionIconBox: {
+    width: moderateScale(44),
+    height: moderateScale(44),
+    borderRadius: moderateScale(12),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: {
+    ...Typography.caption,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    fontSize: moderateScale(11),
+    flexWrap: 'wrap',
+  },
+
+  // Section headers
   section: {
-    marginBottom: verticalScale(24),
+    marginBottom: verticalScale(8),
   },
   sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(10),
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+  },
+  sectionDot: {
+    width: moderateScale(6),
+    height: moderateScale(6),
+    borderRadius: moderateScale(3),
   },
   sectionTitle: {
     ...Typography.heading3,
     color: Colors.textPrimary,
-    fontSize: moderateScale(Typography.heading3.fontSize ?? 16),
+    fontSize: moderateScale(15),
+    fontWeight: '700',
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(2),
   },
   viewAll: {
     ...Typography.caption,
     color: Colors.accent,
     fontWeight: '600',
-    fontSize: moderateScale(Typography.caption.fontSize ?? 12),
+    fontSize: moderateScale(12),
   },
-  actionsRow: {
+
+  // Empty card
+  emptyCard: {
     flexDirection: 'row',
-    gap: scale(8),
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: moderateScale(Layout.radius.md),
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    padding: moderateScale(12),
-    marginTop: verticalScale(10),
-    marginBottom: verticalScale(6),
-  },
-  actionBtn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: verticalScale(6),
-  },
-  actionIcon: {
+    gap: scale(12),
+    padding: moderateScale(14),
     backgroundColor: Colors.surface,
-    width: moderateScale(52),
-    height: moderateScale(52),
-    borderRadius: moderateScale(Layout.radius.md),
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  emptyIconBox: {
+    width: moderateScale(42),
+    height: moderateScale(42),
+    borderRadius: moderateScale(21),
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 0.5,
-    borderColor: Colors.border,
   },
-  actionLabel: {
-    ...Typography.label,
-    color: Colors.textPrimary,
-    textAlign: 'center',
-    fontSize: moderateScale(Typography.label.fontSize ?? 10),
-  },
-  recentCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: moderateScale(Layout.radius.md),
-    borderWidth: 0.5,
-    borderColor: Colors.border,
-    padding: moderateScale(12),
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: scale(10),
-    marginBottom: verticalScale(6),
-  },
-  recentDot: {
-    width: moderateScale(8),
-    height: moderateScale(8),
-    borderRadius: moderateScale(4),
-  },
-  recentName: {
+  emptyTitle: {
     ...Typography.body,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.textPrimary,
-    fontSize: moderateScale(Typography.body.fontSize ?? 14),
-  },
-  recentPlan: {
-    ...Typography.caption,
-    color: Colors.textMuted,
-    fontSize: moderateScale(Typography.caption.fontSize ?? 12),
-  },
-  emptyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: moderateScale(12),
-    backgroundColor: Colors.surface,
-    borderRadius: moderateScale(Layout.radius.md),
-    borderWidth: 0.5,
-    borderColor: Colors.border,
+    fontSize: moderateScale(14),
   },
   emptyText: {
     ...Typography.caption,
     color: Colors.textMuted,
+    fontSize: moderateScale(11),
+  },
+
+  // Member list
+  memberList: {
+    backgroundColor: Colors.surface,
+    borderRadius: moderateScale(14),
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    shadowColor: '#15173D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  recentCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(10),
+    paddingHorizontal: moderateScale(14),
+    paddingVertical: verticalScale(12),
+  },
+  recentCardBorder: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: Colors.border,
+  },
+  memberAvatar: {
+    width: moderateScale(38),
+    height: moderateScale(38),
+    borderRadius: moderateScale(19),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberAvatarText: {
+    fontWeight: '700',
+    fontSize: moderateScale(13),
+  },
+  memberInfo: {
+    flex: 1,
+  },
+  recentName: {
+    ...Typography.body,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    fontSize: moderateScale(13),
+  },
+  recentPlan: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: moderateScale(11),
+    marginTop: 1,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(4),
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(3),
+    borderRadius: moderateScale(20),
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  statusText: {
+    fontSize: moderateScale(9),
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });

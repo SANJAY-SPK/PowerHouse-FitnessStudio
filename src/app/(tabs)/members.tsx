@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, TextInput, FlatList, StyleSheet,
-  TouchableOpacity, Text, ActivityIndicator,
+  TouchableOpacity, Text, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,20 +13,27 @@ import MemberCard from '@/components/MemberCard';
 import EmptyState from '@/components/EmptyState';
 import { scale, moderateScale, verticalScale } from '@/constants/scaling';
 
-type FilterType = 'all' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'PAUSED';
+type FilterType = 'all' | 'ACTIVE' | 'EXPIRING' | 'EXPIRED' | 'PAUSED' | 'PT';
 
-const FILTERS: { key: FilterType; label: string }[] = [
-  { key: 'all',      label: 'All' },
-  { key: 'ACTIVE',   label: 'Active' },
-  { key: 'EXPIRING', label: 'Expiring' },
-  { key: 'EXPIRED',  label: 'Expired' },
-  { key: 'PAUSED',   label: 'Paused' },
+const FILTERS: { key: FilterType; label: string; color: string; bg: string }[] = [
+  { key: 'all',      label: 'All',      color: Colors.textPrimary, bg: 'rgba(21,23,61,0.08)'   },
+  { key: 'ACTIVE',   label: 'Active',   color: '#15803d',          bg: 'rgba(34,197,94,0.1)'   },
+  { key: 'EXPIRING', label: 'Expiring', color: '#92400e',          bg: 'rgba(245,158,11,0.1)'  },
+  { key: 'EXPIRED',  label: 'Expired',  color: '#991b1b',          bg: 'rgba(239,68,68,0.1)'   },
+  { key: 'PAUSED',   label: 'Paused',   color: '#374151',          bg: 'rgba(156,163,175,0.1)' },
+  { key: 'PT',       label: '⚡ PT',    color: '#92400e',          bg: 'rgba(198,134,10,0.1)'  },
 ];
+
+const STATUS_COLORS: Record<string, string> = {
+  ACTIVE: Colors.activeGreen,
+  EXPIRING: Colors.expiringAmber,
+  EXPIRED: Colors.expiredRed,
+  PAUSED: Colors.pausedGray,
+};
 
 export default function MembersScreen() {
   const { members, isLoading, error, fetchMembers } = useMemberStore();
   const params = useLocalSearchParams<{ success?: string }>();
-
   const [search, setSearch]               = useState('');
   const [filter, setFilter]               = useState<FilterType>('all');
   const [showSuccessToast, setShowSuccessToast] = useState(false);
@@ -50,7 +57,16 @@ export default function MembersScreen() {
       const matchSearch =
         m.name.toLowerCase().includes(search.toLowerCase()) ||
         m.phone.includes(search);
-      const matchFilter = filter === 'all' || m.status === filter;
+
+      let matchFilter: boolean;
+      if (filter === 'all') {
+        matchFilter = true;
+      } else if (filter === 'PT') {
+        matchFilter = !!m.isPtMember;
+      } else {
+        matchFilter = m.status === filter;
+      }
+
       return matchSearch && matchFilter;
     });
   }, [members, search, filter]);
@@ -63,6 +79,8 @@ export default function MembersScreen() {
   };
 
   const expiringCount = members.filter(m => m.status === 'EXPIRING').length;
+  const expiredCount  = members.filter(m => m.status === 'EXPIRED').length;
+  const ptCount       = members.filter(m => m.isPtMember).length;
 
   return (
     <View style={styles.root}>
@@ -70,7 +88,9 @@ export default function MembersScreen() {
       {/* Success Toast */}
       {showSuccessToast && (
         <View style={styles.toast}>
-          <Ionicons name="checkmark-circle" size={20} color="#fff" />
+          <View style={styles.toastIconBox}>
+            <Ionicons name="checkmark-circle" size={18} color="#fff" />
+          </View>
           <Text style={styles.toastText}>
             {params.success === 'updated'
               ? 'Member updated successfully!'
@@ -81,14 +101,39 @@ export default function MembersScreen() {
 
       <AppHeader
         title="Members"
-        subtitle={`${members.length} total · ${expiringCount} expiring`}
+        subtitle={`${members.length} total · ${expiringCount} expiring · ${ptCount} PT`}
       />
 
       <View style={styles.body}>
 
+        {/* Summary strip */}
+        <View style={styles.summaryStrip}>
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: Colors.activeGreen }]}>
+              {members.filter(m => m.status === 'ACTIVE').length}
+            </Text>
+            <Text style={styles.summaryKey}>Active</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: Colors.expiringAmber }]}>{expiringCount}</Text>
+            <Text style={styles.summaryKey}>Expiring</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: Colors.expiredRed }]}>{expiredCount}</Text>
+            <Text style={styles.summaryKey}>Expired</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: '#C6860A' }]}>{ptCount}</Text>
+            <Text style={styles.summaryKey}>PT</Text>
+          </View>
+        </View>
+
         {/* Search */}
         <View style={styles.searchBar}>
-          <Ionicons name="search-outline" size={18} color={Colors.accent} />
+          <Ionicons name="search-outline" size={18} color={Colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or phone…"
@@ -97,26 +142,38 @@ export default function MembersScreen() {
             onChangeText={setSearch}
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
+            <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Filter chips */}
-        <View style={styles.filtersWrap}>
-          {FILTERS.map(f => (
-            <TouchableOpacity
-              key={f.key}
-              style={[styles.chip, filter === f.key && styles.chipActive]}
-              onPress={() => setFilter(f.key)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chipText, filter === f.key && styles.chipTextActive]}>
-                {f.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Filter chips — scrollable */}
+        <View style={{ height: verticalScale(36), marginBottom: verticalScale(12) }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersWrap}
+          >
+            {FILTERS.map(f => (
+              <TouchableOpacity
+                key={f.key}
+                style={[
+                  styles.chip,
+                  filter === f.key && { backgroundColor: f.bg, borderColor: f.color },
+                ]}
+                onPress={() => setFilter(f.key)}
+                activeOpacity={0.7}
+              >
+                <Text style={[
+                  styles.chipText,
+                  filter === f.key && { color: f.color, fontWeight: '700' },
+                ]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         </View>
 
         {/* Error banner */}
@@ -127,6 +184,16 @@ export default function MembersScreen() {
             <TouchableOpacity onPress={() => fetchMembers()}>
               <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* PT summary banner */}
+        {filter === 'PT' && ptCount > 0 && (
+          <View style={styles.ptBanner}>
+            <Ionicons name="fitness" size={14} color="#C6860A" />
+            <Text style={styles.ptBannerText}>
+              {ptCount} PT Member{ptCount !== 1 ? 's' : ''} · Personal Training
+            </Text>
           </View>
         )}
 
@@ -149,11 +216,13 @@ export default function MembersScreen() {
             refreshing={isLoading}
             ListEmptyComponent={
               <EmptyState
-                icon="people-outline"
-                title="No members found"
+                icon={filter === 'PT' ? 'fitness-outline' : 'people-outline'}
+                title={filter === 'PT' ? 'No PT members' : 'No members found'}
                 subtitle={
                   search
                     ? 'Try a different search term'
+                    : filter === 'PT'
+                    ? 'Members on PT-Monthly or PT-3 Months plans appear here'
                     : filter !== 'all'
                     ? `No ${filter.toLowerCase()} members`
                     : 'Add your first member using the + button'
@@ -178,18 +247,62 @@ export default function MembersScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-  body: { flex: 1, padding: scale(Layout.spacing.lg) },
+  body: { flex: 1, paddingHorizontal: scale(Layout.spacing.lg), paddingTop: verticalScale(12) },
+
+  // Summary strip
+  summaryStrip: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: verticalScale(10),
+    marginBottom: verticalScale(12),
+    shadowColor: '#15173D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: verticalScale(2),
+  },
+  summaryValue: {
+    fontSize: moderateScale(18),
+    fontWeight: '800',
+  },
+  summaryKey: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    fontSize: moderateScale(10),
+    fontWeight: '500',
+  },
+  summaryDivider: {
+    width: 1,
+    height: '70%',
+    alignSelf: 'center',
+    backgroundColor: Colors.border,
+  },
+
+  // Search
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: moderateScale(Layout.radius.md),
-    borderWidth: 0.5,
+    borderRadius: moderateScale(12),
+    borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: scale(12),
     height: verticalScale(46),
     gap: scale(8),
-    marginBottom: verticalScale(12),
+    marginBottom: verticalScale(10),
+    shadowColor: '#15173D',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
@@ -197,34 +310,54 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: moderateScale(Typography.body.fontSize ?? 14),
   },
+
+  // Filter chips
   filtersWrap: {
     flexDirection: 'row',
     gap: scale(6),
-    marginBottom: verticalScale(14),
+    paddingRight: scale(20),
   },
   chip: {
+    height: verticalScale(30),
     paddingHorizontal: scale(14),
-    paddingVertical: verticalScale(6),
+    justifyContent: 'center',
     borderRadius: moderateScale(Layout.radius.full),
     backgroundColor: Colors.surface,
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: Colors.border,
   },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   chipText: {
     ...Typography.caption,
-    color: Colors.textPrimary,
+    color: Colors.textMuted,
     fontWeight: '500',
-    fontSize: moderateScale(Typography.caption.fontSize ?? 12),
+    fontSize: moderateScale(12),
   },
-  chipTextActive: { color: Colors.textOnDark },
+
+  // Banners
+  ptBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(6),
+    backgroundColor: 'rgba(198,134,10,0.08)',
+    borderRadius: moderateScale(Layout.radius.sm),
+    borderWidth: 1,
+    borderColor: 'rgba(198,134,10,0.3)',
+    padding: moderateScale(10),
+    marginBottom: verticalScale(10),
+  },
+  ptBannerText: {
+    ...Typography.caption,
+    color: '#C6860A',
+    fontWeight: '600',
+    fontSize: moderateScale(12),
+  },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: Colors.expiredBg,
     borderRadius: moderateScale(Layout.radius.sm),
-    borderWidth: 0.5,
+    borderWidth: 1,
     borderColor: Colors.expiredRed,
     padding: moderateScale(10),
     marginBottom: verticalScale(10),
@@ -239,6 +372,8 @@ const styles = StyleSheet.create({
     color: Colors.accent,
     fontWeight: '700',
   },
+
+  // Loading
   loadingWrap: {
     flex: 1,
     alignItems: 'center',
@@ -249,38 +384,54 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.textMuted,
   },
-  list: { paddingBottom: verticalScale(80) },
+  list: { paddingBottom: verticalScale(100) },
+
+  // FAB
   fab: {
     position: 'absolute',
-    bottom: verticalScale(24),
+    bottom: verticalScale(114),
     right: scale(20),
-    width: moderateScale(56),
-    height: moderateScale(56),
-    borderRadius: moderateScale(28),
+    width: moderateScale(58),
+    height: moderateScale(58),
+    borderRadius: moderateScale(29),
     backgroundColor: Colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: verticalScale(4) },
-    shadowOpacity: 0.35,
-    shadowRadius: moderateScale(8),
-    elevation: 6,
+    shadowOffset: { width: 0, height: verticalScale(6) },
+    shadowOpacity: 0.4,
+    shadowRadius: moderateScale(10),
+    elevation: 8,
     zIndex: 10,
   },
+
+  // Toast
   toast: {
     position: 'absolute',
-    top: verticalScale(40),
+    top: verticalScale(50),
     left: scale(20),
     right: scale(20),
     backgroundColor: Colors.activeGreen,
-    borderRadius: moderateScale(8),
+    borderRadius: moderateScale(12),
     paddingVertical: verticalScale(12),
     paddingHorizontal: scale(16),
     flexDirection: 'row',
     alignItems: 'center',
     gap: scale(10),
     zIndex: 999,
-    elevation: 4,
+    elevation: 8,
+    shadowColor: Colors.activeGreen,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  toastText: { color: '#fff', fontWeight: '600', fontSize: moderateScale(14) },
+  toastIconBox: {
+    width: moderateScale(28),
+    height: moderateScale(28),
+    borderRadius: moderateScale(14),
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toastText: { color: '#fff', fontWeight: '700', fontSize: moderateScale(13), flex: 1 },
 });

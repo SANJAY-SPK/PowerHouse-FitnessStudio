@@ -1,5 +1,5 @@
 export type MemberStatus = 'ACTIVE' | 'INACTIVE' | 'EXPIRED' | 'EXPIRING' | 'PAUSED';
-export type PlanType = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
+export type PlanType = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL' | 'HALF_YEARLY' | 'YEARLY' | 'LIFETIME' | 'PT_MONTHLY' | 'PT_3MONTHS';
 export type PaymentMode = 'CASH' | 'UPI' | 'CARD';
 export type PaymentStatus = 'paid' | 'due';
 
@@ -26,7 +26,7 @@ export interface Member {
   address?: string;
   joinDate: string;
   assignedTrainer?: string;
-  planId: string;
+  planId?: number;
   planName: string;
   planType: PlanType;
   planStartDate: string;
@@ -38,4 +38,6 @@ export interface Member {
   payments: Payment[];
   daysRemaining: number;
   notes?: string;
+  /** True when member is on a PT plan (PT_MONTHLY or PT_3MONTHS) */
+  isPtMember?: boolean;
 }
