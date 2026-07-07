@@ -25,13 +25,8 @@ export default function TabLayout() {
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          // Flicker fix: match the scene background to the app background
-          // so there's no white flash when switching tabs.
           sceneStyle: { backgroundColor: Colors.surface },
-          // Smooth cross-fade + slide when switching tabs instead of an
-          // instant cut. Requires @react-navigation/bottom-tabs v7+
-          // (ships with Expo SDK 52+). Falls back gracefully if unsupported.
-          animation: 'shift',
+          animation: 'fade', // 'shift' is unreliable with custom tabBars
         }}
       >
         <Tabs.Screen

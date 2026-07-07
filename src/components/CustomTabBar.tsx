@@ -1,55 +1,47 @@
-import React, { useEffect } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, LayoutChangeEvent } from 'react-native';
 import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withSpring,
-    interpolateColor,
 } from 'react-native-reanimated';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import { Colors } from '@/constants/theme';
 import { scale, moderateScale, verticalScale } from '@/constants/scaling';
 
-// ─── Single animated tab button ─────────────────────────────────────────────
+const BAR_HEIGHT = verticalScale(62);
+
+// ─── Single tab button ───────────────────────────────────────────────────────
 interface TabItemProps {
     route: any;
     descriptor: any;
     isFocused: boolean;
     onPress: () => void;
     onLongPress: () => void;
+    onLayout: (e: LayoutChangeEvent) => void;
 }
 
-function TabItem({ route, descriptor, isFocused, onPress, onLongPress }: TabItemProps) {
+function TabItem({ route, descriptor, isFocused, onPress, onLongPress, onLayout }: TabItemProps) {
     const { options } = descriptor;
     const label = (options.title ?? route.name) as string;
     const badge = options.tabBarBadge as string | number | undefined;
 
-    // 0 -> inactive, 1 -> active. Drives pill background, icon scale, and label reveal.
-    const focusAnim = useSharedValue(isFocused ? 1 : 0);
-    // Independent press feedback so it can layer on top of the focus animation.
+    const iconScale = useSharedValue(isFocused ? 1 : 0.92);
     const pressAnim = useSharedValue(1);
 
     useEffect(() => {
-        focusAnim.value = withSpring(isFocused ? 1 : 0, { damping: 16, stiffness: 170 });
+        iconScale.value = withSpring(isFocused ? 1 : 0.92, { damping: 16, stiffness: 200 });
     }, [isFocused]);
 
-    const pillStyle = useAnimatedStyle(() => ({
-        backgroundColor: interpolateColor(focusAnim.value, [0, 1], ['transparent', `${Colors.accent}18`]),
-        transform: [
-            { scale: pressAnim.value },
-            { scale: 0.88 + focusAnim.value * 0.12 },
-        ],
-    }));
-
-    const labelStyle = useAnimatedStyle(() => ({
-        opacity: focusAnim.value,
-        transform: [{ translateY: (1 - focusAnim.value) * 5 }],
+    const iconStyle = useAnimatedStyle(() => ({
+        transform: [{ scale: iconScale.value * pressAnim.value }],
     }));
 
     const iconColor = isFocused ? Colors.accent : Colors.pausedGray;
 
     const handlePress = () => {
-        Haptics.selectionAsync().catch(() => { });
+        Haptics.selectionAsync().catch(() => {});
         onPress();
     };
 
@@ -59,60 +51,98 @@ function TabItem({ route, descriptor, isFocused, onPress, onLongPress }: TabItem
             accessibilityState={isFocused ? { selected: true } : {}}
             onPress={handlePress}
             onLongPress={onLongPress}
-            onPressIn={() => { pressAnim.value = withSpring(0.86, { damping: 14, stiffness: 300 }); }}
+            onPressIn={() => { pressAnim.value = withSpring(0.88, { damping: 14, stiffness: 300 }); }}
             onPressOut={() => { pressAnim.value = withSpring(1, { damping: 10, stiffness: 220 }); }}
-            activeOpacity={0.9}
+            activeOpacity={1}
             style={styles.tabItem}
+            onLayout={onLayout}
         >
-            <Animated.View style={[styles.pill, pillStyle]}>
-                <View style={styles.iconSlot}>
-                    {options.tabBarIcon?.({ focused: isFocused, color: iconColor, size: moderateScale(20) })}
-                    {badge !== undefined && (
-                        <View style={[styles.badge, options.tabBarBadgeStyle]}>
-                            <Text style={styles.badgeText} numberOfLines={1}>{badge}</Text>
-                        </View>
-                    )}
-                </View>
+            <Animated.View style={[styles.iconSlot, iconStyle]}>
+                {options.tabBarIcon?.({ focused: isFocused, color: iconColor, size: moderateScale(18) })}
+                {badge !== undefined && (
+                    <View style={[styles.badge, options.tabBarBadgeStyle]}>
+                        <Text style={styles.badgeText} numberOfLines={1}>{badge}</Text>
+                    </View>
+                )}
             </Animated.View>
 
-            <Animated.Text style={[styles.label, labelStyle, { color: iconColor }]} numberOfLines={1}>
-                {label}
-            </Animated.Text>
+            {isFocused && (
+                <Text style={[styles.label, { color: iconColor }]} numberOfLines={1}>
+                    {label}
+                </Text>
+            )}
         </TouchableOpacity>
     );
 }
 
-// ─── Floating tab bar container ─────────────────────────────────────────────
+// ─── Floating tab bar with sliding indicator ────────────────────────────────
 export default function CustomTabBar({ state, descriptors, navigation }: any) {
+    const layouts = useRef<{ x: number; width: number }[]>([]);
+    const [, forceRender] = useState(0);
+
+    const indicatorX = useSharedValue(0);
+    const indicatorWidth = useSharedValue(0);
+
+    const measure = (index: number) => (e: LayoutChangeEvent) => {
+        const { x, width } = e.nativeEvent.layout;
+        layouts.current[index] = { x, width };
+        if (index === state.index) {
+            indicatorX.value = x;
+            indicatorWidth.value = width;
+        }
+        forceRender((n) => n + 1);
+    };
+
+    useEffect(() => {
+        const target = layouts.current[state.index];
+        if (target) {
+            indicatorX.value = withSpring(target.x, { damping: 18, stiffness: 200 });
+            indicatorWidth.value = withSpring(target.width, { damping: 18, stiffness: 200 });
+        }
+    }, [state.index]);
+
+    const indicatorStyle = useAnimatedStyle(() => ({
+        transform: [{ translateX: indicatorX.value }],
+        width: indicatorWidth.value,
+    }));
+
     return (
         <View style={styles.container} pointerEvents="box-none">
-            <View style={styles.bar}>
-                {state.routes.map((route, index) => {
-                    const descriptor = descriptors[route.key];
-                    const isFocused = state.index === index;
+            <View style={styles.barWrap}>
+                <BlurView intensity={60} tint="systemMaterialLight" style={StyleSheet.absoluteFill} />
+                <View style={[StyleSheet.absoluteFill, styles.barTint]} />
 
-                    const onPress = () => {
-                        const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                        if (!isFocused && !event.defaultPrevented) {
-                            navigation.navigate(route.name);
-                        }
-                    };
+                <Animated.View style={[styles.indicator, indicatorStyle]} />
 
-                    const onLongPress = () => {
-                        navigation.emit({ type: 'tabLongPress', target: route.key });
-                    };
+                <View style={styles.bar}>
+                    {state.routes.map((route: any, index: number) => {
+                        const descriptor = descriptors[route.key];
+                        const isFocused = state.index === index;
 
-                    return (
-                        <TabItem
-                            key={route.key}
-                            route={route}
-                            descriptor={descriptor}
-                            isFocused={isFocused}
-                            onPress={onPress}
-                            onLongPress={onLongPress}
-                        />
-                    );
-                })}
+                        const onPress = () => {
+                            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                            if (!isFocused && !event.defaultPrevented) {
+                                navigation.navigate(route.name);
+                            }
+                        };
+
+                        const onLongPress = () => {
+                            navigation.emit({ type: 'tabLongPress', target: route.key });
+                        };
+
+                        return (
+                            <TabItem
+                                key={route.key}
+                                route={route}
+                                descriptor={descriptor}
+                                isFocused={isFocused}
+                                onPress={onPress}
+                                onLongPress={onLongPress}
+                                onLayout={measure(index)}
+                            />
+                        );
+                    })}
+                </View>
             </View>
         </View>
     );
@@ -126,62 +156,73 @@ const styles = StyleSheet.create({
         bottom: 0,
         alignItems: 'center',
     },
+    barWrap: {
+        width: '90%',
+        height: BAR_HEIGHT,
+        marginBottom: verticalScale(20),
+        borderRadius: BAR_HEIGHT / 2,
+        overflow: 'hidden',
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: verticalScale(6) },
+        shadowOpacity: 0.14,
+        shadowRadius: moderateScale(12),
+        elevation: 8,
+    },
+    barTint: {
+        backgroundColor: `${Colors.surface}CC`,
+    },
     bar: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
-        backgroundColor: Colors.surface,
-        width: '90%',
-        marginBottom: verticalScale(16),
-        borderRadius: moderateScale(22),
-        paddingVertical: verticalScale(10),
         paddingHorizontal: scale(4),
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: verticalScale(10) },
-        shadowOpacity: 0.14,
-        shadowRadius: moderateScale(16),
-        elevation: 10,
         borderWidth: moderateScale(1),
         borderColor: 'rgba(21,23,61,0.06)',
+        borderRadius: BAR_HEIGHT / 2,
+    },
+    indicator: {
+        position: 'absolute',
+        top: verticalScale(4),
+        bottom: verticalScale(4),
+        backgroundColor: `${Colors.softPink}30`,
+        borderRadius: moderateScale(30),
     },
     tabItem: {
         flex: 1,
+        height: '100%',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: verticalScale(3),
-    },
-    pill: {
-        width: moderateScale(44),
-        height: moderateScale(32),
-        borderRadius: moderateScale(14),
-        alignItems: 'center',
-        justifyContent: 'center',
+        gap: verticalScale(1),
     },
     iconSlot: {
         alignItems: 'center',
         justifyContent: 'center',
+        width: moderateScale(22),
+        height: moderateScale(22),
     },
     label: {
-        fontSize: moderateScale(10),
+        fontSize: moderateScale(9),
         fontWeight: '700',
+        letterSpacing: 0.1,
     },
     badge: {
         position: 'absolute',
-        top: -4,
-        right: -10,
+        top: -3,
+        right: -8,
         backgroundColor: Colors.expiredRed,
-        minWidth: moderateScale(16),
-        height: moderateScale(16),
-        borderRadius: moderateScale(8),
+        minWidth: moderateScale(14),
+        height: moderateScale(14),
+        borderRadius: moderateScale(7),
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 3,
-        borderWidth: 1.5,
+        paddingHorizontal: 2,
+        borderWidth: 1.2,
         borderColor: Colors.surface,
     },
     badgeText: {
         color: '#fff',
-        fontSize: moderateScale(9),
+        fontSize: moderateScale(8),
         fontWeight: '800',
     },
 });
