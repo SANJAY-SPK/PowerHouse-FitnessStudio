@@ -4,16 +4,16 @@
     "slug": "PowerHouseFitnessStudio",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/App_Logo.jpeg",
+    "icon": "./assets/images/App_Logo.png",
     "scheme": "powerhousefitnessstudio",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/App_Logo.jpeg"
+      "icon": "./assets/images/App_Logo.png"
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#15173D",
-        "foregroundImage": "./assets/images/App_Logo.jpeg",
+        "foregroundImage": "./assets/images/App_Logo.png",
         "backgroundImage": "",
         "monochromeImage": ""
       },
@@ -22,7 +22,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/App_Logo.jpeg"
+      "favicon": "./assets/images/App_Logo.png"
     },
     "backgroundColor": "#FFFFFF",
     "plugins": [
@@ -32,7 +32,7 @@
         {
           "backgroundColor": "#15173D",
           "android": {
-            "image": "./assets/images/App_Logo.jpeg",
+            "image": "./assets/images/App_Logo.png",
             "imageWidth": 200
           }
         }

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, ImageBackground, RefreshControl } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Layout } from '@/constants/theme';
@@ -118,6 +118,7 @@ export default function DashboardScreen() {
   const { members, isLoading: membersLoading, fetchMembers } = useMemberStore();
   const { unreadCount, fetchUnreadCount } = useAlertStore();
   const [alerts, setAlerts] = React.useState<Alert[]>([]);
+  const [refreshing, setRefreshing] = React.useState(false);
 
   const loadAlerts = async () => {
     try {
@@ -137,6 +138,17 @@ export default function DashboardScreen() {
     fetchMembers();
     fetchUnreadCount();
     loadAlerts();
+  }, []);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      fetchStats(),
+      fetchMembers(),
+      fetchUnreadCount(),
+      loadAlerts(),
+    ]);
+    setRefreshing(false);
   }, []);
 
   const recentMembers = members.slice(0, 3);
@@ -161,6 +173,14 @@ export default function DashboardScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.accent]}
+            tintColor={Colors.accent}
+          />
+        }
       >
         {/* ── Hero Banner ───────────────────────────────────────────── */}
         <View style={styles.heroBanner}>

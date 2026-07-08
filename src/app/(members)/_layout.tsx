@@ -8,9 +8,13 @@ export default function MembersLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.surface },
+          contentStyle: { backgroundColor: Colors.background },
           animation: 'slide_from_right',
-        }}>
+          gestureEnabled: true,
+          gestureDirection: 'horizontal',
+          presentation: 'card',
+        }}
+      >
         <Stack.Screen name="memberDetail" />
         <Stack.Screen name="memberForm" />
       </Stack>

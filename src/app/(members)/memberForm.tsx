@@ -309,10 +309,10 @@ export default function MemberFormScreen() {
     try {
       if (isEditing && id) {
         await updateMember(Number(id), payload);
-        router.replace({ pathname: '/(members)/memberDetail', params: { id, success: 'updated' } });
+        router.navigate({ pathname: '/(members)/memberDetail', params: { id, success: 'updated' } });
       } else {
         await addMember(payload);
-        router.replace({ pathname: '/(tabs)/members', params: { success: 'created' } });
+        router.navigate({ pathname: '/(tabs)/members', params: { success: 'created' } });
       }
     } catch {}
   };
