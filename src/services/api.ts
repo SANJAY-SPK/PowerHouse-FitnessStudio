@@ -1,11 +1,13 @@
-import axios from 'axios';
-import { API_BASE_URL } from '@/constants/config';
-import { clearStoredAuth, getCachedAuth, readStoredAuth } from './authStorage';
+import axios from "axios";
+import { API_BASE_URL } from "@/constants/config";
+import { clearStoredAuth, getCachedAuth, readStoredAuth } from "./authStorage";
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  // Render free tier cold-starts can take up to 50s.
+  // 60s timeout ensures the first request after inactivity still succeeds.
+  timeout: 60000,
+  headers: { "Content-Type": "application/json" },
 });
 
 let unauthorizedHandler: (() => Promise<void> | void) | null = null;
