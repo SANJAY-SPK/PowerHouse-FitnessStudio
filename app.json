@@ -7,6 +7,12 @@
     "icon": "./assets/images/App_Logo.png",
     "scheme": "powerhousefitnessstudio",
     "userInterfaceStyle": "automatic",
+    "updates": {
+      "url": "https://u.expo.dev/225f7ca6-734f-414c-9fdd-3b267e738e1d"
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
     "ios": {
       "icon": "./assets/images/App_Logo.png"
     },
