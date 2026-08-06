@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl,
+  ActivityIndicator, RefreshControl, Modal, FlatList, Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography, Layout } from '@/constants/theme';
@@ -49,6 +49,287 @@ function getLedgerRange(period: Period, year: number, month: number): { from: st
   }
   return { from: `${year}-01-01`, to: `${year}-12-31` };
 }
+
+// ─── Week list for a given month ──────────────────────────────────────────────
+interface WeekRange { label: string; from: string; to: string; }
+function getWeeksInMonth(year: number, month: number): WeekRange[] {
+  const weeks: WeekRange[] = [];
+  // Iterate each day of the month and collect unique Mon–Sun ranges
+  const seen = new Set<string>();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month - 1, d);
+    const bounds = weekBounds(date.toISOString().slice(0, 10));
+    const key = bounds.from;
+    if (!seen.has(key)) {
+      seen.add(key);
+      const fromDate = new Date(bounds.from + 'T00:00:00');
+      const toDate   = new Date(bounds.to   + 'T00:00:00');
+      const fmt = (dt: Date) =>
+        dt.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+      weeks.push({ label: `${fmt(fromDate)} – ${fmt(toDate)}`, from: bounds.from, to: bounds.to });
+    }
+  }
+  return weeks;
+}
+
+// ─── Month names ──────────────────────────────────────────────────────────────
+const MONTH_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+// ─── Period Picker Modal ───────────────────────────────────────────────────────
+interface PeriodPickerModalProps {
+  visible: boolean;
+  period: Period;
+  selectedDate: Date;
+  onConfirm: (date: Date) => void;
+  onCancel: () => void;
+}
+
+function PeriodPickerModal({
+  visible, period, selectedDate, onConfirm, onCancel,
+}: PeriodPickerModalProps) {
+  const slideAnim = useRef(new Animated.Value(500)).current;
+
+  // Picker-local state
+  const [pickerYear,  setPickerYear]  = useState(selectedDate.getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(selectedDate.getMonth() + 1);
+
+  useEffect(() => {
+    if (visible) {
+      setPickerYear(selectedDate.getFullYear());
+      setPickerMonth(selectedDate.getMonth() + 1);
+      Animated.spring(slideAnim, {
+        toValue: 0, useNativeDriver: true, tension: 65, friction: 10,
+      }).start();
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: 500, duration: 200, useNativeDriver: true,
+      }).start();
+    }
+  }, [visible]);
+
+  if (period === 'DAILY') {
+    return (
+      <DateTimePickerModal
+        isVisible={visible}
+        mode="date"
+        date={selectedDate}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+        accentColor={Colors.accent}
+      />
+    );
+  }
+
+  const confirmMonth = (m: number) => {
+    const d = new Date(pickerYear, m - 1, 1);
+    onConfirm(d);
+  };
+
+  const confirmYear = (y: number) => {
+    const d = new Date(y, selectedDate.getMonth(), 1);
+    onConfirm(d);
+  };
+
+  const confirmWeek = (from: string) => {
+    const d = new Date(from + 'T00:00:00');
+    onConfirm(d);
+  };
+
+  const weeks = period === 'WEEKLY' ? getWeeksInMonth(pickerYear, pickerMonth) : [];
+
+  // Year range: current year ±4
+  const baseYear = new Date().getFullYear();
+  const years = Array.from({ length: 9 }, (_, i) => baseYear - 4 + i);
+
+  return (
+    <Modal transparent animationType="none" visible={visible} onRequestClose={onCancel}>
+      <TouchableOpacity style={pickerSheet.overlay} activeOpacity={1} onPress={onCancel} />
+      <Animated.View style={[pickerSheet.panel, { transform: [{ translateY: slideAnim }] }]}>
+        {/* Handle */}
+        <View style={pickerSheet.handle} />
+
+        {/* Header */}
+        <View style={pickerSheet.header}>
+          <Text style={pickerSheet.title}>
+            {period === 'MONTHLY' ? 'Select Month'
+              : period === 'YEARLY' ? 'Select Year'
+              : 'Select Week'}
+          </Text>
+          <TouchableOpacity style={pickerSheet.closeBtn} onPress={onCancel}>
+            <Ionicons name="close" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Year navigator — shown for MONTHLY and WEEKLY */}
+        {(period === 'MONTHLY' || period === 'WEEKLY') && (
+          <View style={pickerSheet.yearNav}>
+            <TouchableOpacity
+              style={pickerSheet.yearArrow}
+              onPress={() => setPickerYear(y => y - 1)}
+            >
+              <Ionicons name="chevron-back" size={18} color={Colors.accent} />
+            </TouchableOpacity>
+            <Text style={pickerSheet.yearLabel}>{pickerYear}</Text>
+            <TouchableOpacity
+              style={pickerSheet.yearArrow}
+              onPress={() => setPickerYear(y => y + 1)}
+            >
+              <Ionicons name="chevron-forward" size={18} color={Colors.accent} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Month navigator — shown for WEEKLY only */}
+        {period === 'WEEKLY' && (
+          <View style={[pickerSheet.yearNav, { marginTop: -verticalScale(4) }]}>
+            <TouchableOpacity
+              style={pickerSheet.yearArrow}
+              onPress={() => {
+                if (pickerMonth === 1) { setPickerMonth(12); setPickerYear(y => y - 1); }
+                else setPickerMonth(m => m - 1);
+              }}
+            >
+              <Ionicons name="chevron-back" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+            <Text style={pickerSheet.monthLabel}>{MONTH_NAMES[pickerMonth - 1]}</Text>
+            <TouchableOpacity
+              style={pickerSheet.yearArrow}
+              onPress={() => {
+                if (pickerMonth === 12) { setPickerMonth(1); setPickerYear(y => y + 1); }
+                else setPickerMonth(m => m + 1);
+              }}
+            >
+              <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* ── MONTHLY: 3×4 month grid ─────────────────────────────────── */}
+        {period === 'MONTHLY' && (
+          <View style={pickerSheet.monthGrid}>
+            {MONTH_NAMES.map((name, idx) => {
+              const m = idx + 1;
+              const isActive =
+                m === selectedDate.getMonth() + 1 &&
+                pickerYear === selectedDate.getFullYear();
+              const isCurrent =
+                m === new Date().getMonth() + 1 &&
+                pickerYear === new Date().getFullYear();
+              return (
+                <TouchableOpacity
+                  key={m}
+                  style={[
+                    pickerSheet.monthCell,
+                    isActive && pickerSheet.monthCellActive,
+                    isCurrent && !isActive && pickerSheet.monthCellToday,
+                  ]}
+                  onPress={() => confirmMonth(m)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    pickerSheet.monthCellText,
+                    isActive && pickerSheet.monthCellTextActive,
+                    isCurrent && !isActive && { color: Colors.accent },
+                  ]}>
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* ── YEARLY: year list ──────────────────────────────────────── */}
+        {period === 'YEARLY' && (
+          <FlatList
+            data={years}
+            keyExtractor={y => String(y)}
+            style={pickerSheet.yearList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: y }) => {
+              const isActive = y === selectedDate.getFullYear();
+              const isCurrent = y === new Date().getFullYear();
+              return (
+                <TouchableOpacity
+                  style={[
+                    pickerSheet.yearRow,
+                    isActive && pickerSheet.yearRowActive,
+                  ]}
+                  onPress={() => confirmYear(y)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[
+                    pickerSheet.yearRowText,
+                    isActive && pickerSheet.yearRowTextActive,
+                    isCurrent && !isActive && { color: Colors.accent },
+                  ]}>
+                    {y}
+                  </Text>
+                  {isCurrent && (
+                    <Text style={pickerSheet.yearCurrentBadge}>Current</Text>
+                  )}
+                  {isActive && (
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+
+        {/* ── WEEKLY: week range list ────────────────────────────────── */}
+        {period === 'WEEKLY' && (
+          <FlatList
+            data={weeks}
+            keyExtractor={w => w.from}
+            style={pickerSheet.yearList}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: w, index }) => {
+              const selBounds = weekBounds(
+                `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2,'0')}-${String(selectedDate.getDate()).padStart(2,'0')}`
+              );
+              const isActive = w.from === selBounds.from;
+              return (
+                <TouchableOpacity
+                  style={[
+                    pickerSheet.weekRow,
+                    isActive && pickerSheet.yearRowActive,
+                  ]}
+                  onPress={() => confirmWeek(w.from)}
+                  activeOpacity={0.7}
+                >
+                  <View style={pickerSheet.weekRowLeft}>
+                    <View style={[
+                      pickerSheet.weekBadge,
+                      isActive && { backgroundColor: 'rgba(255,255,255,0.25)' },
+                    ]}>
+                      <Text style={[
+                        pickerSheet.weekBadgeText,
+                        isActive && { color: '#fff' },
+                      ]}>W{index + 1}</Text>
+                    </View>
+                    <Text style={[
+                      pickerSheet.yearRowText,
+                      isActive && pickerSheet.yearRowTextActive,
+                    ]}>{w.label}</Text>
+                  </View>
+                  {isActive && (
+                    <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+      </Animated.View>
+    </Modal>
+  );
+}
+
 
 // ─── Premium Bar Chart ─────────────────────────────────────────────────────────
 interface BarChartProps {
@@ -381,13 +662,12 @@ export default function RevenueScreen() {
             <Text style={styles.dateChooseBtnText}>Choose {chooserLabel}</Text>
           </TouchableOpacity>
         </View>
-        <DateTimePickerModal
-          isVisible={showDatePicker}
-          mode="date"
-          date={selectedDate}
+        <PeriodPickerModal
+          visible={showDatePicker}
+          period={period}
+          selectedDate={selectedDate}
           onConfirm={handleDateConfirm}
           onCancel={() => setShowDatePicker(false)}
-          accentColor={Colors.accent}
         />
 
         {statsLoading ? (
@@ -871,5 +1151,202 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.accent,
     fontSize: moderateScale(17),
+  },
+});
+
+// ─── Period Picker Sheet Styles ───────────────────────────────────────────────
+const pickerSheet = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  panel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: moderateScale(24),
+    borderTopRightRadius: moderateScale(24),
+    paddingHorizontal: scale(20),
+    paddingBottom: verticalScale(48),
+    paddingTop: verticalScale(12),
+    gap: verticalScale(14),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  handle: {
+    width: scale(40),
+    height: verticalScale(4),
+    backgroundColor: Colors.border,
+    borderRadius: moderateScale(4),
+    alignSelf: 'center',
+    marginBottom: verticalScale(4),
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    ...Typography.heading3,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    fontSize: moderateScale(16),
+  },
+  closeBtn: {
+    width: moderateScale(32),
+    height: moderateScale(32),
+    borderRadius: moderateScale(16),
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Year navigator bar
+  yearNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: scale(24),
+    backgroundColor: Colors.background,
+    borderRadius: moderateScale(12),
+    paddingVertical: verticalScale(10),
+  },
+  yearArrow: {
+    width: moderateScale(34),
+    height: moderateScale(34),
+    borderRadius: moderateScale(17),
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  yearLabel: {
+    ...Typography.heading2,
+    color: Colors.textPrimary,
+    fontWeight: '800',
+    fontSize: moderateScale(20),
+    minWidth: scale(60),
+    textAlign: 'center',
+  },
+  monthLabel: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    fontSize: moderateScale(14),
+    minWidth: scale(40),
+    textAlign: 'center',
+  },
+  // Month grid
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scale(8),
+  },
+  monthCell: {
+    width: '22%',
+    flexGrow: 1,
+    paddingVertical: verticalScale(12),
+    borderRadius: moderateScale(10),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  monthCellActive: {
+    backgroundColor: Colors.accent,
+    borderColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  monthCellToday: {
+    borderColor: Colors.accent,
+    borderWidth: 1.5,
+  },
+  monthCellText: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+    fontSize: moderateScale(13),
+  },
+  monthCellTextActive: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+  // Year list
+  yearList: {
+    maxHeight: verticalScale(260),
+  },
+  yearRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: verticalScale(13),
+    paddingHorizontal: scale(16),
+    borderRadius: moderateScale(10),
+    marginBottom: verticalScale(4),
+    backgroundColor: Colors.background,
+  },
+  yearRowActive: {
+    backgroundColor: Colors.accent,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  yearRowText: {
+    ...Typography.body,
+    color: Colors.textPrimary,
+    fontWeight: '700',
+    fontSize: moderateScale(16),
+  },
+  yearRowTextActive: {
+    color: '#fff',
+  },
+  yearCurrentBadge: {
+    fontSize: moderateScale(10),
+    fontWeight: '700',
+    color: Colors.accent,
+    backgroundColor: 'rgba(152,37,152,0.1)',
+    paddingHorizontal: scale(8),
+    paddingVertical: verticalScale(2),
+    borderRadius: moderateScale(10),
+  },
+  // Week rows
+  weekRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: verticalScale(12),
+    paddingHorizontal: scale(14),
+    borderRadius: moderateScale(10),
+    marginBottom: verticalScale(5),
+    backgroundColor: Colors.background,
+  },
+  weekRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scale(10),
+  },
+  weekBadge: {
+    backgroundColor: 'rgba(152,37,152,0.1)',
+    borderRadius: moderateScale(6),
+    paddingHorizontal: scale(7),
+    paddingVertical: verticalScale(3),
+  },
+  weekBadgeText: {
+    fontSize: moderateScale(10),
+    fontWeight: '800',
+    color: Colors.accent,
+    letterSpacing: 0.3,
   },
 });
