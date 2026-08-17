@@ -343,7 +343,7 @@ export default function MemberFormScreen() {
 
         <FieldInput
           label="Full Name" value={name} onChangeText={setName}
-          placeholder="e.g. Rahul Sharma" error={errors.name}
+          placeholder="e.g. Deepak" error={errors.name}
           icon="person" required
         />
         <FieldInput
@@ -353,7 +353,7 @@ export default function MemberFormScreen() {
         />
         <FieldInput
           label="Email Address" value={email} onChangeText={setEmail}
-          placeholder="e.g. rahul@email.com" error={errors.email}
+          placeholder="e.g. deepak@gmail.com" error={errors.email}
           icon="mail" keyboardType="email-address" autoCapitalize="none"
         />
 
@@ -373,7 +373,7 @@ export default function MemberFormScreen() {
 
         <FieldInput
           label="Home Address" value={address} onChangeText={setAddress}
-          placeholder="12, Nehru Street, Tiruppur"
+          placeholder="12, Nehru Street,Coimbatore"
           icon="location"
         />
 

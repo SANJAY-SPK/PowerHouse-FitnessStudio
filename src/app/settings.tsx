@@ -243,17 +243,7 @@ export default function SettingsScreen() {
       <AppHeader title="Settings" showBack={true} onBack={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* ── Gym Info ────────────────────────────────────────────────── */}
-        <View style={styles.sectionHeader}>
-          <Ionicons name="business-outline" size={13} color={Colors.accent} />
-          <Text style={styles.sectionHeaderText}>GYM INFORMATION</Text>
-        </View>
-        <View style={styles.card}>
-          <InfoRow icon="business" label="Gym Name" value="Power House FS" iconBg="rgba(152,37,152,0.1)" iconColor={Colors.accent} onPress={() => {}} />
-          <InfoRow icon="person" label="Owner / Admin" value="Admin" iconBg="rgba(21,23,61,0.08)" iconColor={Colors.primary} onPress={() => {}} />
-          <InfoRow icon="call" label="Contact" value="+91 99000 00001" iconBg="rgba(34,197,94,0.1)" iconColor={Colors.activeGreen} onPress={() => {}} />
-          <InfoRow icon="location" label="Location" value="Tiruppur, Tamil Nadu" iconBg="rgba(2,132,199,0.1)" iconColor="#0284C7" />
-        </View>
+
 
         {/* ── Notifications ───────────────────────────────────────────── */}
         <View style={styles.sectionHeader}>
@@ -440,8 +430,7 @@ export default function SettingsScreen() {
           <Text style={styles.sectionHeaderText}>APP</Text>
         </View>
         <View style={styles.card}>
-          <InfoRow icon="information-circle" label="About PowerHouse FS" iconBg="rgba(2,132,199,0.1)" iconColor="#0284C7" onPress={() => {}} />
-          <InfoRow icon="code-slash-outline" label="Version" value="1.0.0" iconBg="rgba(21,23,61,0.06)" iconColor={Colors.textMuted} />
+          <InfoRow icon="code-slash-outline" label="Version" value="1.0.3" iconBg="rgba(21,23,61,0.06)" iconColor={Colors.textMuted} />
         </View>
 
         {/* Logout */}
@@ -453,7 +442,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={14} color={Colors.expiredRed} style={{ marginLeft: 'auto' }} />
         </TouchableOpacity>
 
-        <Text style={styles.footerText}>PowerHouse Fitness Studio © 2025</Text>
+        <Text style={styles.footerText}>PowerHouse Fitness Studio © 2026</Text>
 
       </ScrollView>
 
