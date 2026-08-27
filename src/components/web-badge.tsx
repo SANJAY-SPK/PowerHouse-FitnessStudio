@@ -12,7 +12,7 @@ export function WebBadge() {
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="code" themeColor="textSecondary" style={styles.versionText}>
+      <ThemedText type="code" themeColor="textMuted" style={styles.versionText}>
         v{version}
       </ThemedText>
       <Image
@@ -29,9 +29,9 @@ export function WebBadge() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: Spacing.five,
+    padding: Spacing.xl,
     alignItems: 'center',
-    gap: Spacing.two,
+    gap: Spacing.sm,
   },
   versionText: {
     textAlign: 'center',

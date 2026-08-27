@@ -1,30 +1,38 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
-
 import { Colors } from '@/constants/theme';
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
     <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
+      backgroundColor={Colors.surface}
+      indicatorColor={Colors.background}
+      labelStyle={{ selected: { color: Colors.primary } }}>
+      
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/home.png')}
-          renderingMode="template"
+        <MaterialCommunityIcons 
+          name="home-variant-outline" 
+          size={24} 
+          color={Colors.textMuted} 
         />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="explore">
-        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          src={require('@/assets/images/tabIcons/explore.png')}
-          renderingMode="template"
+      <NativeTabs.Trigger name="workouts">
+        <NativeTabs.Trigger.Label>Workouts</NativeTabs.Trigger.Label>
+        <MaterialCommunityIcons 
+          name="dumbbell" 
+          size={24} 
+          color={Colors.textMuted} 
+        />
+      </NativeTabs.Trigger>
+      
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
+        <MaterialCommunityIcons 
+          name="account-outline" 
+          size={24} 
+          color={Colors.textMuted} 
         />
       </NativeTabs.Trigger>
     </NativeTabs>
